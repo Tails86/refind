@@ -33,7 +33,7 @@ import time
 import math
 from datetime import datetime, timedelta
 
-__version__ = '0.9.1'
+__version__ = '0.9.2'
 
 class FindType(Enum):
     DIRECTORY = enum.auto()

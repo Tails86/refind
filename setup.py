@@ -38,6 +38,6 @@ setuptools.setup(
         'dev': ['check-manifest']
     },
     entry_points={
-        'console_scripts': ['find=find.__main__:main']
+        'console_scripts': ['find=find.__main__:main', 'refind=find.__main__:main']
     }
 )
