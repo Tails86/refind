@@ -32,8 +32,12 @@ import subprocess
 import time
 import math
 from datetime import datetime, timedelta
+import glob
 
 __version__ = '0.9.4'
+
+def _is_windows():
+    return sys.platform.lower().startswith('win')
 
 class FindType(Enum):
     DIRECTORY = enum.auto()
@@ -487,7 +491,15 @@ class Finder:
         self._verbose = False
 
     def add_root_dir(self, root_dir):
-        self._root_dirs.append(root_dir)
+        if _is_windows():
+            # Need to manually expand this out
+            expanded_dirs = [f for f in glob.glob(root_dir)]
+            if not expanded_dirs:
+                print('No match for: {}'.format(root_dir), file=sys.stderr)
+            self._root_dirs.extend(expanded_dirs)
+        else:
+            # *nix and *nix based systems do this from command line
+            self._root_dirs.append(root_dir)
 
     def set_min_depth(self, min_depth):
         self._min_depth = min_depth
