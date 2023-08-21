@@ -34,7 +34,7 @@ import math
 from datetime import datetime, timedelta
 import glob
 
-__version__ = '0.9.4'
+__version__ = '0.9.5'
 
 def _is_windows():
     return sys.platform.lower().startswith('win')
