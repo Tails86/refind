@@ -33,7 +33,7 @@ import time
 import math
 from datetime import datetime, timedelta
 
-__version__ = '0.9.3'
+__version__ = '0.9.4'
 
 class FindType(Enum):
     DIRECTORY = enum.auto()
@@ -1071,15 +1071,3 @@ def main(cliargs):
     else:
         print('Failed to parse arguments', file=sys.stderr)
         return 1
-
-if __name__ == "__main__":
-    cliargs = sys.argv[1:]
-    try:
-        sys.exit(main(cliargs))
-    except Exception as e:
-        if '-verbose' not in cliargs:
-            # Format the exception into a less verbose output
-            print('{}: {}'.format(type(e).__name__, str(e)), file=sys.stderr)
-        else:
-            # Allow Python repl to format the exception to output
-            raise e
