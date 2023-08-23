@@ -730,7 +730,7 @@ class FinderArgParser:
     def _print_help():
         print('''Partially implements find command entirely in Python.
 
-    Usage: find.py [path...] [expression...]
+    Usage: refind [path...] [expression...]
 
     default path is the current directory (.); default action is -print
 
@@ -787,7 +787,7 @@ class FinderArgParser:
         -print  Print the matching path
         -print0  Print the matching path without newline
         -pyprint PYFORMAT  Print using python print() using named args:
-                           find_root: the root given to find.py
+                           find_root: the root given to refind
                            root: the directory name this item is in
                            rel_dir: the relative directory name from root
                            name: the name of the item
