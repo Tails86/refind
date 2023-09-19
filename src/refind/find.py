@@ -33,16 +33,55 @@ import time
 import math
 from datetime import datetime, timedelta
 import glob
+import stat
 
 __version__ = '0.9.5'
+
+try:
+    import grp
+except ModuleNotFoundError:
+    GID_ENABLED = False
+
+    def _group_id_to_name(id:int) -> str:
+        return 'N/A'
+
+    def _group_name_to_id(name:str) -> int:
+        return -1
+else:
+    GID_ENABLED = True
+
+    def _group_id_to_name(id:int) -> str:
+        return grp.getgrgid(id).gr_name
+
+    def _group_name_to_id(name:str) ->int:
+        return grp.getgrnam(name).gr_gid
+
+try:
+    import pwd
+except ModuleNotFoundError:
+    UID_ENABLED = False
+
+    def _user_id_to_name(id:int) -> str:
+        return 'N/A'
+
+    def _user_name_to_id(name:str) -> int:
+        return -1
+else:
+    UID_ENABLED = True
+
+    def _user_id_to_name(id:int) -> str:
+        return pwd.getpwuid(id).pw_name
+
+    def _user_name_to_id(name:str) -> int:
+        return pwd.getpwnam(name).pw_uid
 
 def _is_windows():
     return sys.platform.lower().startswith('win')
 
 class FindType(Enum):
-    DIRECTORY = enum.auto()
-    FILE = enum.auto()
-    SYMBOLIC_LINK = enum.auto()
+    DIRECTORY = 'd'
+    FILE = 'f'
+    SYMBOLIC_LINK = 'l'
 
 class RegexType(Enum):
     PY = enum.auto()
@@ -149,8 +188,21 @@ class PathParser:
         }
         s = os.stat(self.full_path)
         d.update({k: getattr(s, k) for k in dir(s) if k.startswith('st_')})
+        d['atime'] = datetime.fromtimestamp(s.st_atime)
+        d['ctime'] = datetime.fromtimestamp(s.st_ctime)
+        d['mtime'] = datetime.fromtimestamp(s.st_mtime)
         d['mode_oct'] = oct(s.st_mode)[2:]
-        d['perm'] = oct(s.st_mode & 0o777)[2:]
+        d['perm_oct'] = oct(s.st_mode & 0o777)[2:]
+        t = self.get_type()
+        d['perm'] = stat.filemode(s.st_mode)
+        d['type'] = t.value if t else '-'
+        d['depth'] = self.get_rel_depth()
+        d['group'] = _group_id_to_name(s.st_gid)
+        try:
+            d['link'] = os.readlink(self.full_path)
+        except OSError:
+            d['link'] = ''
+        d['user'] = _user_id_to_name(s.st_uid)
         return d
 
 class Action:
@@ -397,18 +449,15 @@ class GroupMatcher(Matcher):
     ''' Matches against group name or ID '''
     def __init__(self, gid_or_name):
         super().__init__()
-        # Don't try to import grp until the user tries to use it
         # Windows will not support this module
-        try:
-            import grp
-        except ModuleNotFoundError:
+        if not GID_ENABLED:
             raise ModuleNotFoundError('No module named \'grp\' - this OS may not support group matching')
         self._gid = None
         try:
             self._gid = int(gid_or_name)
         except ValueError:
             try:
-                self._gid = grp.getgrnam(gid_or_name).gr_gid
+                self._gid = _group_name_to_id(gid_or_name)
             except KeyError:
                 raise ValueError('Could not locate group \'{}\' on system'.format(gid_or_name))
 
@@ -420,18 +469,15 @@ class UserMatcher(Matcher):
     ''' Matches against user name or ID '''
     def __init__(self, uid_or_name):
         super().__init__()
-        # Don't try to import pwd until the user tries to use it
         # Windows will not support this module
-        try:
-            import pwd
-        except ModuleNotFoundError:
+        if not UID_ENABLED:
             raise ModuleNotFoundError('No module named \'pwd\' - this OS may not support user matching')
         self._uid = None
         try:
             self._uid = int(uid_or_name)
         except ValueError:
             try:
-                self._uid = pwd.getpwnam(uid_or_name).pw_uid
+                self._uid = _user_name_to_id(uid_or_name)
             except KeyError:
                 raise ValueError('Could not locate user \'{}\' on system'.format(uid_or_name))
 
@@ -793,7 +839,16 @@ class FinderArgParser:
                            name: the name of the item
                            full_path: the full path of the item
                            mode_oct: st_mode as octal string
-                           perm: the octal permission value
+                           perm_oct: only the permissions part of mode_oct
+                           perm: the permission in symbolic form
+                           type: the type character
+                           depth: the directory depth integer of this item
+                           group: group name
+                           user: user name
+                           link: the file that this links to, if any
+                           atime: access time as datetime
+                           ctime: created time as datetime
+                           mtime: modified time as datetime
                            any st args from os.stat()
         -pyprint0 PYFORMAT  Same as pyprint except end is set to empty string
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
