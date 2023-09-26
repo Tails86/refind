@@ -1,3 +1,5 @@
+#!/bin/env python3
+
 import unittest
 from unittest.mock import patch
 import os

@@ -636,6 +636,8 @@ class Finder:
             if os.path.isdir(root_dir):
                 # Walk through each
                 for root, dirs, files in os.walk(root_dir, followlinks=False):
+                    dirs.sort()
+                    files.sort()
                     if self._is_path_depth_ok(root_dir, root):
                         for entity in dirs + files:
                             self._handle_path(PathParser(root_dir, (root, entity)), actions, match_list)
