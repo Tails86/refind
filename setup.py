@@ -24,11 +24,12 @@ setuptools.setup(
         'Environment :: Console',
         'Intended Audience :: Information Technology',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
         'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
         'Programming Language :: Python :: 3 :: Only',
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
@@ -38,6 +39,6 @@ setuptools.setup(
         'dev': ['check-manifest']
     },
     entry_points={
-        'console_scripts': ['find=refind.__main__:main', 'refind=refind.__main__:main']
+        'console_scripts': ['refind=refind.__main__:main']
     }
 )

@@ -1003,6 +1003,7 @@ class FinderArgParser:
                 self._current_regex_type = RegexType.SED
             elif self._current_argument == 'egrep':
                 self._current_regex_type = RegexType.EGREP
+            else:
                 raise ValueError(
                     'Unknown regular expression type {}; valid types are py, sed, egrep.'.format(self._current_argument))
         elif self._current_option == Options.NAME:

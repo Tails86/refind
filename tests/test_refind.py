@@ -124,6 +124,19 @@ class RefindTests(unittest.TestCase):
             ''
         ])
 
+    def test_name_and_type(self):
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-name', 'dir*.txt', '-type', 'f'])
+            lines = fake_out.getvalue().split('\n')
+        s = os.path.sep
+        self.assertEqual(lines, [
+            f'.{s}dir1{s}dirfile1-1.txt', f'.{s}dir1{s}dirfile1-2.txt', f'.{s}dir1{s}dirfile1-3.txt',
+            f'.{s}dir2{s}dirfile2-1.txt', f'.{s}dir2{s}dirfile2-2.txt', f'.{s}dir2{s}dirfile2-3.txt',
+            f'.{s}dir3{s}dirfile3-1.txt', f'.{s}dir3{s}dirfile3-2.txt', f'.{s}dir3{s}dirfile3-3.txt',
+            f'.{s}dir4{s}dirfile4-1.txt', f'.{s}dir4{s}dirfile4-2.txt', f'.{s}dir4{s}dirfile4-3.txt',
+            ''
+        ])
+
     def test_name_or_false(self):
         with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
             find.main(['.', '-name', 'file?.txt', '-or', '-false'])
@@ -149,16 +162,63 @@ class RefindTests(unittest.TestCase):
             ''
         ])
 
-    def test_name_and_type(self):
+    def test_regex_default_type(self):
         with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
-            find.main(['.', '-name', 'dir*.txt', '-type', 'f'])
+            find.main(['.', '-regex', '.*[\\/]\([f-i]\+\)le[1-3].txt'])
             lines = fake_out.getvalue().split('\n')
         s = os.path.sep
         self.assertEqual(lines, [
+            f'.{s}file1.txt', f'.{s}file2.txt', f'.{s}file3.txt',
+            ''
+        ])
+
+    def test_regex_sed_type(self):
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-regextype', 'sed', '-regex', '.*[\\/]\([f-i]\+\)le[1-3].txt'])
+            lines = fake_out.getvalue().split('\n')
+        s = os.path.sep
+        self.assertEqual(lines, [
+            f'.{s}file1.txt', f'.{s}file2.txt', f'.{s}file3.txt',
+            ''
+        ])
+
+    def test_regex_egrep_type(self):
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-regextype', 'egrep', '-regex', '.*[\\/]([f-i]+)le[1-3].txt'])
+            lines = fake_out.getvalue().split('\n')
+        s = os.path.sep
+        self.assertEqual(lines, [
+            f'.{s}file1.txt', f'.{s}file2.txt', f'.{s}file3.txt',
+            ''
+        ])
+
+    def test_regex_py_type(self):
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-regextype', 'py', '-regex', '.*[\\/]([f-i]+)le[1-3].txt'])
+            lines = fake_out.getvalue().split('\n')
+        s = os.path.sep
+        self.assertEqual(lines, [
+            f'.{s}file1.txt', f'.{s}file2.txt', f'.{s}file3.txt',
+            ''
+        ])
+
+    def test_path(self):
+        s = os.path.sep
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-path', f'*{s}dir1{s}*.txt'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
             f'.{s}dir1{s}dirfile1-1.txt', f'.{s}dir1{s}dirfile1-2.txt', f'.{s}dir1{s}dirfile1-3.txt',
-            f'.{s}dir2{s}dirfile2-1.txt', f'.{s}dir2{s}dirfile2-2.txt', f'.{s}dir2{s}dirfile2-3.txt',
-            f'.{s}dir3{s}dirfile3-1.txt', f'.{s}dir3{s}dirfile3-2.txt', f'.{s}dir3{s}dirfile3-3.txt',
-            f'.{s}dir4{s}dirfile4-1.txt', f'.{s}dir4{s}dirfile4-2.txt', f'.{s}dir4{s}dirfile4-3.txt',
+            ''
+        ])
+
+    def test_wholename(self):
+        s = os.path.sep
+        with patch('refind.find.sys.stdout', new = StringIO()) as fake_out:
+            find.main(['.', '-wholename', f'*{s}dir1{s}*.txt'])
+            lines = fake_out.getvalue().split('\n')
+        self.assertEqual(lines, [
+            f'.{s}dir1{s}dirfile1-1.txt', f'.{s}dir1{s}dirfile1-2.txt', f'.{s}dir1{s}dirfile1-3.txt',
             ''
         ])
 
