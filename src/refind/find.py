@@ -22,6 +22,7 @@
 
 import os
 import sys
+import threading
 from enum import Enum
 import enum
 import fnmatch
@@ -75,6 +76,43 @@ else:
 
 def _is_windows():
     return sys.platform.lower().startswith('win')
+
+class SharedFileWriter:
+    ''' Simple file writer used when multiple objects need to write to the same file '''
+    files = {}
+    files_mutex = threading.Semaphore(1)
+
+    def __init__(self, file_path, binary=True, append=False):
+        file_path = os.path.abspath(file_path)
+        self._file_path = file_path
+        with __class__.files_mutex:
+            if file_path not in __class__.files:
+                if append:
+                    mode = 'a'
+                else:
+                    mode = 'w'
+
+                if binary:
+                    mode += 'b'
+
+                __class__.files[file_path] = {
+                    'file': open(file_path, mode),
+                    'count': 0
+                }
+            self._file_entry = __class__.files[file_path]
+            self._file_entry['count'] += 1
+            self._file = self._file_entry['file']
+        # Copy over write and flush methods
+        self.write = self._file.write
+        self.flush = self._file.flush
+
+    def __del__(self):
+        with __class__.files_mutex:
+            __class__.files[self._file_path]['count'] -= 1
+            if __class__.files[self._file_path]['count'] <= 0:
+                # File is no longer used
+                del __class__.files[self._file_path]
+                self._file.close()
 
 class FindType(Enum):
     BLOCK = 'b'
@@ -823,10 +861,15 @@ class Options(Enum):
     EXEC = enum.auto()
     PYEXEC = enum.auto()
     PRINT = enum.auto()
+    FPRINT = enum.auto()
     PRINT0 = enum.auto()
+    FPRINT0 = enum.auto()
     PRINTF = enum.auto()
+    FPRINTF = enum.auto()
     PYPRINT = enum.auto()
+    FPYPRINT = enum.auto()
     PYPRINT0 = enum.auto()
+    FPYPRINT0 = enum.auto()
     DELETE = enum.auto()
     VERBOSE = enum.auto()
 
@@ -890,10 +933,15 @@ class FinderArgParser:
         '-exec': Options.EXEC,
         '-pyexec': Options.PYEXEC,
         '-print': Options.PRINT,
+        '-fprint': Options.FPRINT,
         '-print0': Options.PRINT0,
+        '-fprint0': Options.FPRINT0,
         '-printf': Options.PRINTF,
+        '-fprintf': Options.FPRINTF,
         '-pyprint': Options.PYPRINT,
+        '-fpyprint': Options.FPYPRINT,
         '-pyprint0': Options.PYPRINT0,
+        '-fpyprint0': Options.FPYPRINT0,
         '-delete': Options.DELETE,
         '-verbose': Options.VERBOSE
     }
@@ -910,7 +958,7 @@ class FinderArgParser:
         self._arg_idx = 0
         self._opt_idx = 0
         self._current_regex_type = RegexType.SED
-        self._current_command = []
+        self._current_option_arguments = []
         self._current_option = None
         self._current_option_name = None
         self._current_argument = None
@@ -974,8 +1022,11 @@ class FinderArgParser:
 
     actions
         -print  Print the matching path
+        -fprint FILE  Same as above but write to given FILE instead of stdout
         -print0  Print the matching path without newline
-        -printf  Print using find printf formatting
+        -fprint0 FILE  Same as above but write to given FILE instead of stdout
+        -printf FORMAT  Print using find printf formatting
+        -fprintf FILE FORMAT  Same as above but write to given FILE instead of stdout
         -pyprint PYFORMAT  Print using python print() using named args:
                            find_root: the root given to refind
                            root: the directory name this item is in
@@ -994,7 +1045,9 @@ class FinderArgParser:
                            ctime: created time as datetime
                            mtime: modified time as datetime
                            any st args from os.stat()
+        -fpyprint FILE PYFORMAT  Same as above but write to given FILE instead of stdout
         -pyprint0 PYFORMAT  Same as pyprint except end is set to empty string
+        -fpyprint0 FILE PYFORMAT  Same as above but write to given FILE instead of stdout
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
         -pyexec PYFORMAT ;  Execute the COMMAND as a pyformat (see pyprint)
         -delete  Deletes every matching path''')
@@ -1101,7 +1154,7 @@ class FinderArgParser:
 
         return epoc
 
-    def _handle_arg(self, finder):
+    def _handle_arg(self, finder:Finder):
         ''' Handle argument, returns True iff parsing is complete for this option '''
         complete = True
         if self._current_option is None or self._current_option == Options.DOUBLEDASH:
@@ -1234,20 +1287,45 @@ class FinderArgParser:
             finder.append_matcher(PermMatcher(perm, logic))
         elif self._current_option == Options.EXEC or self._current_option == Options.PYEXEC:
             if self._current_argument != ';':
-                self._current_command += [self._current_argument]
                 complete = False # Continue parsing until ;
             else:
                 if self._current_option == Options.EXEC:
-                    finder.add_action(ExecuteAction(self._current_command))
+                    finder.add_action(ExecuteAction(self._current_option_arguments))
                 else:
-                    finder.add_action(PyExecuteAction(self._current_command))
-                self._current_command = []
+                    finder.add_action(PyExecuteAction(self._current_option_arguments))
+        elif self._current_option == Options.FPRINT:
+            fp = SharedFileWriter(self._current_argument, binary=False)
+            finder.add_action(PrintAction(file=fp))
+        elif self._current_option == Options.FPRINT0:
+            fp = SharedFileWriter(self._current_argument, binary=False)
+            finder.add_action(PrintAction(end='', file=fp))
         elif self._current_option == Options.PRINTF:
             finder.add_action(PrintfAction(self._current_argument, ''))
+        elif self._current_option == Options.FPRINTF:
+            if len(self._current_option_arguments) >= 2:
+                fp = SharedFileWriter(self._current_option_arguments[0], binary=False)
+                finder.add_action(PrintfAction(self._current_argument, end='', file=fp))
+            else:
+                # Keep waiting for more arguments
+                complete = False
         elif self._current_option == Options.PYPRINT:
             finder.add_action(PyPrintAction(self._current_argument))
+        elif self._current_option == Options.FPYPRINT:
+            if len(self._current_option_arguments) >= 2:
+                fp = SharedFileWriter(self._current_option_arguments[0], binary=False)
+                finder.add_action(PyPrintAction(self._current_argument, file=fp))
+            else:
+                # Keep waiting for more arguments
+                complete = False
         elif self._current_option == Options.PYPRINT0:
             finder.add_action(PyPrintAction(self._current_argument, ''))
+        elif self._current_option == Options.FPYPRINT0:
+            if len(self._current_option_arguments) >= 2:
+                fp = SharedFileWriter(self._current_option_arguments[0], binary=False)
+                finder.add_action(PyPrintAction(self._current_argument, end='', file=fp))
+            else:
+                # Keep waiting for more arguments
+                complete = False
         return complete
 
     def parse(self, cliargs, finder):
@@ -1258,9 +1336,11 @@ class FinderArgParser:
             opt = __class__.OPTION_DICT.get(arg, None)
             if opt is None or self._current_option is not None:
                 # This is an argument to an option
+                self._current_option_arguments += [self._current_argument]
                 if self._handle_arg(finder):
                     self._current_option = None
                     self._current_option_name = None
+                    self._current_option_arguments = []
             else:
                 self._opt_idx += 1
                 self._current_option = opt
@@ -1269,8 +1349,12 @@ class FinderArgParser:
                     self._current_option = None
                     self._current_option_name = None
             self._arg_idx += 1
-        if self._current_command:
-            raise ValueError('arguments to option -exec must end with ;')
+
+        if self._current_option is not None:
+            if self._current_option == Options.EXEC or self._current_option == Options.PYEXEC:
+                raise ValueError('arguments to option -exec and -pyexec must end with ;')
+            else:
+                raise ValueError(f'missing arguments to option {self._current_option_name}')
         return True
 
 def main(cliargs):

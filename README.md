@@ -91,8 +91,11 @@ Partially implements find command entirely in Python.
 
     actions
         -print  Print the matching path
+        -fprint FILE  Same as above but write to given FILE instead of stdout
         -print0  Print the matching path without newline
-        -printf  Print using find printf formatting
+        -fprint0 FILE  Same as above but write to given FILE instead of stdout
+        -printf FORMAT  Print using find printf formatting
+        -fprintf FILE FORMAT  Same as above but write to given FILE instead of stdout
         -pyprint PYFORMAT  Print using python print() using named args:
                            find_root: the root given to refind
                            root: the directory name this item is in
@@ -111,7 +114,9 @@ Partially implements find command entirely in Python.
                            ctime: created time as datetime
                            mtime: modified time as datetime
                            any st args from os.stat()
+        -fpyprint FILE PYFORMAT  Same as above but write to given FILE instead of stdout
         -pyprint0 PYFORMAT  Same as pyprint except end is set to empty string
+        -fpyprint0 FILE PYFORMAT  Same as above but write to given FILE instead of stdout
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
         -pyexec PYFORMAT ;  Execute the COMMAND as a pyformat (see pyprint)
         -delete  Deletes every matching path
