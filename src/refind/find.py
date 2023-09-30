@@ -252,7 +252,7 @@ class PrintfAction(Action):
         self._flush = flush
         self._dict = {}
 
-    def _replace_fn(self, matchobj:re.Match):
+    def _replace_fn(self, matchobj):
         format_specifier:str = matchobj.group(1)
         printf_type:str = matchobj.group(2)
         format_type = '%' + format_specifier + printf_type
