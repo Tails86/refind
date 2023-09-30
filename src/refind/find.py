@@ -323,24 +323,24 @@ class PrintfAction(Action):
             # Not handled
             return original_input
         elif format_specifier:
-            if isinstance(value, str):
-                # Printf ignores spaces at the beginning of format string when value is string while
-                # python format would raise exception - explicitly ignore leading spaces here
-                format_specifier = format_specifier.lstrip()
+            if isinstance(value, int):
+                # Integer decimal format
+                t = 'd'
+            elif isinstance(value, str):
+                # String format
+                t = 's'
             elif isinstance(value, float):
-                # Explicitly treat as fixed-point number format
-                format_specifier += 'f'
-
-            if '-' in format_specifier:
-                # The "-" printf specifier is the same as "<" specifier in python format
-                format_specifier = format_specifier.replace('-', '<', 1)
+                # Floating-point decimal format
+                t = 'f'
             else:
-                # Python does left justify by default while printf does right justify by default
-                # This explicitly does right justify by default for this printf action
-                format_specifier = '>' + format_specifier
+                # Shouldn't reach here, but handle it as string
+                value = str(value)
+                t = 's'
 
             try:
-                return f'{value:{format_specifier}}'
+                # As long as Python supports it, it's better to use the modulo operator here
+                # since this conforms more closely to printf formatting
+                return f'%{format_specifier}{t}' % value
             except ValueError:
                 # Invalid format specifier
                 return original_input

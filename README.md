@@ -1,10 +1,36 @@
 # refind
 A find clone in Python with both CLI and library interfaces
 
+## Shameless Promotion
+Check out my other Python clone tools:
+- [sedeuce](https://pypi.org/project/sedeuce/)
+- [greplica](https://pypi.org/project/greplica/)
+
+## Known Differences with find
+
+- The Python module `re` is internally used for all regular expressions. The inputted regular
+    expression is modified only when `sed` is selected as the regextype (default) in order to
+    reverse meaning of escaped characters `+?|{}()`
+- Parenthesis around expressions are not supported
+- printf action differences
+    - Birth time (B) is just treated the same as creation time (C)
+    - %b, %k, %S, and %Y are not supported
+    - Some formatting specifier inconsistencies may be encountered
+- Not all options, tests, and actions are available (see help)
+- pyprint actions are provided which uses Python string formatting
+
+## Contribution
+
+Feel free to open a bug report or make a merge request on [github](https://github.com/Tails86/refind/issues).
+
 ## Installation
 This project is uploaded to PyPI at https://pypi.org/project/refind/
 
 To install, ensure you are connected to the internet and execute: `python3 -m pip install refind --upgrade`
+
+Once installed, there will be a script called `refind` under Python's script directory. Ensure Python's
+scripts directory is under the environment variable `PATH` in order to be able to execute the script
+properly from command line.
 
 ## CLI Help
 ```
