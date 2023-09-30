@@ -279,11 +279,6 @@ class Action:
     def handle(self, path_parser):
         pass
 
-class NullAction(Action):
-    ''' Does nothing - can be used as the default_action when match output is all that is desired '''
-    def handle(self, path_parser):
-        pass
-
 class PrintAction(Action):
     ''' Simply prints the full path of the item '''
     def __init__(self, end:str=None, file:io.IOBase=None, flush:bool=False):
@@ -888,16 +883,14 @@ class Finder:
 
     def execute(
             self,
-            default_root:str='.',
-            default_action:Action=PrintAction,
-            return_list:bool=False
+            default_root:str=None,
+            default_action:Action=None,
+            return_list:bool=True
     ) -> Union[List[PathParser],None]:
         '''
-        Executes with the set options, matchers, and actions.
         Inputs: default_root:  The default root to use when no root was previously added
-                default_action:  The default action to use when no action was previously added
-                return_list:  Set to True if returning a list of PathParser is desired, leave set
-                              to False in order to save on memory when not needed
+                default_action:  The default action to use when no action was previously added.
+                return_list:  set to False in order to save on memory when return not needed
         Returns: a list of PathParser when return_list is True or None when return_list is False
         '''
         root_dirs = self._root_dirs
@@ -1467,19 +1460,8 @@ def main(cliargs):
     arg_parser = FinderArgParser()
     finder = Finder()
     if arg_parser.parse(cliargs, finder):
-        finder.execute()
+        finder.execute(default_root='.', default_action=PrintAction, return_list=False)
         return 0
     else:
         print('Failed to parse arguments', file=sys.stderr)
         return 1
-
-def example():
-    from io import StringIO
-    finder = Finder()
-    finder.set_min_depth(1)
-    finder.add_root('.')
-    finder.append_matcher(TypeMatcher(FindType.FILE, FindType.DIRECTORY))
-    output_stream = StringIO()
-    finder.add_action(PyPrintAction('{perm} {name}', file=output_stream))
-    finder.execute()
-    print(output_stream.getvalue(), end='')

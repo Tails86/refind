@@ -138,7 +138,7 @@ refind can be used as a library from another module. The following is a simple e
     finder.append_matcher(refind.TypeMatcher(FindType.FILE, FindType.DIRECTORY))
     output_stream = StringIO()
     finder.add_action(refind.PyPrintAction('{perm} {name}', file=output_stream))
-    matches = finder.execute(return_list=True)
+    matches = finder.execute()
 
     # Prints the string that contains the result of all actions performed
     print(output_stream.getvalue(), end='')
@@ -185,9 +185,6 @@ def set_matcher(self, matcher:refind.Matcher):
 
 The following Actions are provided by refind.
 ```py
-# Does nothing - can be used as the default_action when match output is all that is desired
-NullAction()
-
 # Simply prints the full path of the item
 PrintAction(end:str=None, file:io.IOBase=None, flush:bool=False)
 
@@ -266,4 +263,21 @@ GatedMatcher(
     right_matcher:refind.Matcher,
     operation:refind.LogicOperation=LogicOperation.AND
 )
+```
+
+The Finder.execute() function should then be called once all options, actions, and matchers are
+set on the Finder object.
+```py
+def execute(
+        self,
+        default_root:str=None,
+        default_action:Action=None,
+        return_list:bool=True
+) -> Union[List[PathParser],None]:
+    '''
+    Inputs: default_root:  The default root to use when no root was previously added
+            default_action:  The default action to use when no action was previously added.
+            return_list:  set to False in order to save on memory when return not needed
+    Returns: a list of PathParser when return_list is True or None when return_list is False
+    '''
 ```
