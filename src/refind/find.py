@@ -228,7 +228,7 @@ class PyPrintAction(Action):
     ''' Prints the item using python format string '''
     def __init__(self, format, end=None, file=None, flush=False):
         super().__init__()
-        self._format = format
+        self._format = bytes(format, "utf-8").decode("unicode_escape")
         self._end = end
         self._file = file
         self._flush = flush
@@ -246,7 +246,7 @@ class PrintfAction(Action):
 
     def __init__(self, format:str, end=None, file=None, flush=False):
         super().__init__()
-        self._format_base = bytes(format, "utf-8").decode("unicode_escape").replace('{', '{{').replace('}', '}}')
+        self._format_base = bytes(format, "utf-8").decode("unicode_escape")
         self._end = end
         self._file = file
         self._flush = flush
