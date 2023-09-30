@@ -10,7 +10,7 @@ To install, ensure you are connected to the internet and execute: `python3 -m pi
 ```
 Partially implements find command entirely in Python.
 
-    Usage: find.py [path...] [expression...]
+    Usage: refind [path...] [expression...]
 
     default path is the current directory (.); default action is -print
 
@@ -66,14 +66,24 @@ Partially implements find command entirely in Python.
     actions
         -print  Print the matching path
         -print0  Print the matching path without newline
+        -printf  Print using find printf formatting
         -pyprint PYFORMAT  Print using python print() using named args:
-                           find_root: the root given to find.py
+                           find_root: the root given to refind
                            root: the directory name this item is in
-                           rel_dir: the relative directory name from root
+                           rel_dir: the relative directory name from find_root
                            name: the name of the item
                            full_path: the full path of the item
                            mode_oct: st_mode as octal string
-                           perm: the octal permission value
+                           perm_oct: only the permissions part of mode_oct
+                           perm: the permission in symbolic form
+                           type: the type character
+                           depth: the directory depth integer of this item
+                           group: group name
+                           user: user name
+                           link: the file that this links to, if any
+                           atime: access time as datetime
+                           ctime: created time as datetime
+                           mtime: modified time as datetime
                            any st args from os.stat()
         -pyprint0 PYFORMAT  Same as pyprint except end is set to empty string
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
