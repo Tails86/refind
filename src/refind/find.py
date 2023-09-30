@@ -77,9 +77,13 @@ def _is_windows():
     return sys.platform.lower().startswith('win')
 
 class FindType(Enum):
+    BLOCK = 'b'
+    CHARACTER = 'c'
     DIRECTORY = 'd'
+    NAMED_PIPE = 'p'
     FILE = 'f'
     SYMBOLIC_LINK = 'l'
+    SOCKET = 's'
 
 class RegexType(Enum):
     PY = enum.auto()
@@ -126,6 +130,8 @@ class PathParser:
             self._rel_dir = ''
             self._name = find_root
             self._full_path = find_root
+        # Saves value of previous call to os.stat()
+        self._stat = None
 
     @property
     def find_root(self):
@@ -155,13 +161,27 @@ class PathParser:
         ''' Returns the full path to the item '''
         return self._full_path
 
+    def _set_stat(self):
+        if self._stat is None:
+            self._stat = os.stat(self.full_path)
+
     def get_type(self):
         ''' Returns the FindType of the item or None if it cannot be determined '''
-        if os.path.islink(self._full_path):
+        self._set_stat()
+        mode = self._stat.st_mode
+        if stat.S_ISLNK(mode):
             return FindType.SYMBOLIC_LINK
-        elif os.path.isdir(self._full_path):
+        elif stat.S_ISDIR(mode):
             return FindType.DIRECTORY
-        elif os.path.isfile(self._full_path):
+        elif stat.S_ISBLK(mode):
+            return FindType.BLOCK
+        elif stat.S_ISCHR(mode):
+            return FindType.CHARACTER
+        elif stat.S_ISFIFO(mode):
+            return FindType.NAMED_PIPE
+        elif stat.S_ISSOCK(mode):
+            return FindType.SOCKET
+        elif stat.S_ISREG(mode):
             return FindType.FILE
         else:
             return None
@@ -187,23 +207,23 @@ class PathParser:
             "name": self.name,
             "find_root": self.find_root
         }
-        s = os.stat(self.full_path)
-        d.update({k: getattr(s, k) for k in dir(s) if k.startswith('st_')})
-        d['atime'] = datetime.fromtimestamp(s.st_atime)
-        d['ctime'] = datetime.fromtimestamp(s.st_ctime)
-        d['mtime'] = datetime.fromtimestamp(s.st_mtime)
-        d['mode_oct'] = oct(s.st_mode)[2:]
-        d['perm_oct'] = oct(s.st_mode & 0o777)[2:]
+        self._set_stat()
+        d.update({k: getattr(self._stat, k) for k in dir(self._stat) if k.startswith('st_')})
+        d['atime'] = datetime.fromtimestamp(self._stat.st_atime)
+        d['ctime'] = datetime.fromtimestamp(self._stat.st_ctime)
+        d['mtime'] = datetime.fromtimestamp(self._stat.st_mtime)
+        d['mode_oct'] = oct(self._stat.st_mode)[2:]
+        d['perm_oct'] = oct(self._stat.st_mode & 0o777)[2:]
         t = self.get_type()
-        d['perm'] = stat.filemode(s.st_mode)
+        d['perm'] = stat.filemode(self._stat.st_mode)
         d['type'] = t.value if t else '-'
         d['depth'] = self.get_rel_depth()
-        d['group'] = _group_id_to_name(s.st_gid)
+        d['group'] = _group_id_to_name(self._stat.st_gid)
         try:
             d['link'] = os.readlink(self.full_path)
         except OSError:
             d['link'] = ''
-        d['user'] = _user_id_to_name(s.st_uid)
+        d['user'] = _user_id_to_name(self._stat.st_uid)
         return d
 
 class Action:
@@ -1094,15 +1114,12 @@ class FinderArgParser:
         elif self._current_option == Options.TYPE:
             types = []
             for c in self._current_argument:
-                if c == 'f':
-                    types.append(FindType.FILE)
-                elif c == 'd':
-                    types.append(FindType.DIRECTORY)
-                elif c == 'l':
-                    types.append(FindType.SYMBOLIC_LINK)
                 # Don't require comma like find command, but also don't error out if they are included
-                elif c != ',':
-                    raise ValueError('Unsupported or unknown type {} in types string: {}'.format(c, self._current_argument))
+                if c != ',':
+                    try:
+                        types.append(FindType(c))
+                    except ValueError:
+                        raise ValueError('Unsupported or unknown type {} in types string: {}'.format(c, self._current_argument))
             if not types:
                 raise ValueError('No value given for type option')
             finder.append_matcher(TypeMatcher(types))
