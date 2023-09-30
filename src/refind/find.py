@@ -33,6 +33,8 @@ import math
 from datetime import datetime, timedelta
 import glob
 import stat
+import io
+from typing import Any, Union, List
 
 __version__ = '0.9.6'
 
@@ -199,9 +201,17 @@ class PathParser:
         ''' Returns the full path to the item '''
         return self._full_path
 
+    def __str__(self) -> str:
+        return self._full_path
+
     def _set_stat(self):
         if self._stat is None:
             self._stat = os.stat(self.full_path)
+
+    @property
+    def stat(self):
+        self._set_stat()
+        return self._stat
 
     def get_type(self):
         ''' Returns the FindType of the item or None if it cannot be determined '''
@@ -269,9 +279,14 @@ class Action:
     def handle(self, path_parser):
         pass
 
+class NullAction(Action):
+    ''' Does nothing - can be used as the default_action when match output is all that is desired '''
+    def handle(self, path_parser):
+        pass
+
 class PrintAction(Action):
     ''' Simply prints the full path of the item '''
-    def __init__(self, end=None, file=None, flush=False):
+    def __init__(self, end:str=None, file:io.IOBase=None, flush:bool=False):
         super().__init__()
         self._end = end
         self._file = file
@@ -282,7 +297,7 @@ class PrintAction(Action):
 
 class PyPrintAction(Action):
     ''' Prints the item using python format string '''
-    def __init__(self, format, end=None, file=None, flush=False):
+    def __init__(self, format:str, end:str=None, file:io.IOBase=None, flush:bool=False):
         super().__init__()
         self._format = bytes(format, "utf-8").decode("unicode_escape")
         self._end = end
@@ -300,7 +315,7 @@ class PrintfAction(Action):
     # Group 2 is printf type (0 to 2 characters in length)
     printf_search_pattern = re.compile(r'%([^a-zA-Z%{[(]*)(([A-CT].)|([a-zD-SU-Z%{[(])|($))')
 
-    def __init__(self, format:str, end=None, file=None, flush=False):
+    def __init__(self, format:str, end:str=None, file:io.IOBase=None, flush:bool=False):
         super().__init__()
         self._format_base = bytes(format, "utf-8").decode("unicode_escape")
         self._end = end
@@ -413,7 +428,7 @@ class PrintfAction(Action):
 
 class ExecuteAction(Action):
     ''' Executes custom command where {} is the full path to the item '''
-    def __init__(self, command):
+    def __init__(self, command:List[str]):
         super().__init__()
         self._command = command
 
@@ -426,7 +441,7 @@ class ExecuteAction(Action):
 
 class PyExecuteAction(Action):
     ''' Executes custom command where each element in the command is a format string '''
-    def __init__(self, command):
+    def __init__(self, command:List[str]):
         super().__init__()
         self._command = command
 
@@ -476,7 +491,7 @@ class Matcher:
 
 class StaticMatcher(Matcher):
     ''' Statically return True or False for every item '''
-    def __init__(self, value):
+    def __init__(self, value:bool):
         super().__init__()
         self._value = value
 
@@ -490,7 +505,7 @@ class DefaultMatcher(StaticMatcher):
 
 class NameMatcher(Matcher):
     ''' Matches against the name of the item '''
-    def __init__(self, pattern):
+    def __init__(self, pattern:str):
         super().__init__()
         self._pattern = pattern
 
@@ -499,7 +514,7 @@ class NameMatcher(Matcher):
 
 class FullPathMatcher(Matcher):
     ''' Matches against the full path of the item '''
-    def __init__(self, pattern):
+    def __init__(self, pattern:str):
         super().__init__()
         self._pattern = pattern
 
@@ -508,7 +523,7 @@ class FullPathMatcher(Matcher):
 
 class RegexMatcher(Matcher):
     ''' Matches against the full path of the item using regex '''
-    def __init__(self, pattern, regex_type):
+    def __init__(self, pattern:str, regex_type:RegexType):
         super().__init__()
         self._regex_type = regex_type
 
@@ -540,16 +555,49 @@ class RegexMatcher(Matcher):
 
 class TypeMatcher(Matcher):
     ''' Matches against the item's type '''
-    def __init__(self, type_list):
+    def __init__(self, *types:Union[FindType,str,List[FindType],List[str]]):
         super().__init__()
-        self._type_list = type_list
+        self._type_list = []
+
+        flattened_types_list = []
+        for t in types:
+            if isinstance(t, list):
+                flattened_types_list.extend(t)
+            else:
+                flattened_types_list.append(t)
+
+        for t in flattened_types_list:
+            if isinstance(t, str):
+                # Try to convert string to types
+                for c in t:
+                    # Don't require comma like find command, but also don't error out if they are included
+                    if c != ',':
+                        try:
+                            self._type_list.append(FindType(c))
+                        except ValueError:
+                            raise ValueError('Unsupported or unknown type {} in types string: {}'.format(c, t))
+            elif isinstance(t, FindType):
+                self._type_list.append(t)
+            else:
+                raise TypeError(f'Invalid type: {type(t)} in given args {types}')
+
+    @property
+    def type_list(self):
+        return self._type_list
 
     def _is_match(self, path_parser):
         return (path_parser.get_type() in self._type_list)
 
 class StatTimeIncrementMatcher(Matcher):
     ''' Matches against os.stat time relative to current time '''
-    def __init__(self, value_comparison, rel_s, increment_s, current_time_s, stat_name):
+    def __init__(
+            self,
+            value_comparison:ValueComparison,
+            rel_s:float,
+            increment_s:float,
+            current_time_s:float,
+            stat_name:str
+    ):
         super().__init__()
         self._value_comparison = value_comparison
         self._rel_s = rel_s
@@ -559,7 +607,7 @@ class StatTimeIncrementMatcher(Matcher):
         self._stat_name = stat_name
 
     def _is_match(self, path_parser):
-        stat = os.stat(path_parser.full_path)
+        stat = path_parser.stat()
         # t should be positive
         t = self._current_time_s - self._get_stat_time(stat)
         t_inc = math.floor(t / self._increment_s)
@@ -576,7 +624,13 @@ class StatTimeIncrementMatcher(Matcher):
 
 class StatTimeMatcher(Matcher):
     ''' Matches against os.stat time to an absolute time '''
-    def __init__(self, value_comparison, stat_or_time, stat_name, r_stat_name=None):
+    def __init__(
+            self,
+            value_comparison:ValueComparison,
+            stat_or_time:Union[os.stat_result,float],
+            stat_name:str,
+            r_stat_name:str=None
+    ):
         super().__init__()
         self._value_comparison = value_comparison
         self._stat_name = stat_name
@@ -615,7 +669,7 @@ class EmptyMatcher(Matcher):
 
 class AccessMatcher(Matcher):
     ''' Matches against access type for current user (read, write, execute) '''
-    def __init__(self, access_type):
+    def __init__(self, access_type:int):
         super().__init__()
         self._access_type = access_type
 
@@ -624,7 +678,7 @@ class AccessMatcher(Matcher):
 
 class GroupMatcher(Matcher):
     ''' Matches against group name or ID '''
-    def __init__(self, gid_or_name):
+    def __init__(self, gid_or_name:Union[int,str]):
         super().__init__()
         # Windows will not support this module
         if not GID_ENABLED:
@@ -644,7 +698,7 @@ class GroupMatcher(Matcher):
 
 class UserMatcher(Matcher):
     ''' Matches against user name or ID '''
-    def __init__(self, uid_or_name):
+    def __init__(self, uid_or_name:Union[int,str]):
         super().__init__()
         # Windows will not support this module
         if not UID_ENABLED:
@@ -664,7 +718,7 @@ class UserMatcher(Matcher):
 
 class PermMatcher(Matcher):
     ''' Matches against octal perm value '''
-    def __init__(self, perm, logic_operation=None):
+    def __init__(self, perm:int, logic_operation:LogicOperation=None):
         super().__init__()
         self._perm = perm
         self._logic_operation = logic_operation
@@ -683,7 +737,7 @@ class PermMatcher(Matcher):
 
 class GatedMatcher(Matcher):
     ''' Gates two matchers together using logical AND or OR '''
-    def __init__(self, left_matcher, right_matcher, operation=LogicOperation.AND):
+    def __init__(self, left_matcher:Matcher, right_matcher:Matcher, operation:LogicOperation=LogicOperation.AND):
         super().__init__()
         self.operation = operation
         self.left_matcher = left_matcher
@@ -703,56 +757,96 @@ class GatedMatcher(Matcher):
 
 class Finder:
     ''' Finder is capable of walking through paths and execute actions on matching paths '''
-    def __init__(self):
+    def __init__(self) -> None:
         self._root_dirs = []
         self._min_depth = 0
         self._max_depth = None
         self._matcher = DefaultMatcher()
         self._current_logic = LogicOperation.AND
-        self._invert = False
+        self._invert = None
         self._actions = []
         self._verbose = False
 
-    def add_root_dir(self, root_dir):
-        if _is_windows():
-            # Need to manually expand this out
-            expanded_dirs = [f for f in glob.glob(root_dir)]
-            if not expanded_dirs:
-                print('No match for: {}'.format(root_dir), file=sys.stderr)
-            self._root_dirs.extend(expanded_dirs)
-        else:
-            # *nix and *nix based systems do this from command line
-            self._root_dirs.append(root_dir)
+    def add_root(self, *root_dirs:Union[str,List[str]]) -> None:
+        '''
+        Adds one or more roots. Each root will be treated as a glob when executing under Windows.
+        '''
+        flattened_roots = []
+        for root_dir in root_dirs:
+            if isinstance(root_dir, list):
+                flattened_roots.extend(root_dir)
+            else:
+                flattened_roots.append(root_dir)
 
-    def set_min_depth(self, min_depth):
+        for root_dir in flattened_roots:
+            if _is_windows():
+                # Need to manually expand this out
+                expanded_dirs = [f for f in glob.glob(root_dir)]
+                if not expanded_dirs:
+                    print('No match for: {}'.format(root_dir), file=sys.stderr)
+                    # Add None as a placeholder to ensure _root_dirs is not empty
+                    # (so default is not used in execute())
+                    self._root_dirs.append(None)
+                else:
+                    self._root_dirs.extend(expanded_dirs)
+            else:
+                # *nix and *nix based systems do this from command line
+                self._root_dirs.append(root_dir)
+
+    def set_min_depth(self, min_depth:int) -> None:
+        '''
+        Sets the global minimum depth limit
+        '''
         self._min_depth = min_depth
 
-    def set_max_depth(self, max_depth):
+    def set_max_depth(self, max_depth:int) -> None:
+        '''
+        Sets the global maximum depth limit
+        '''
         self._max_depth = max_depth
 
-    def set_logic(self, logic):
-        if isinstance(self._matcher, DefaultMatcher):
-            return False
+    def set_logic(self, logic:LogicOperation) -> bool:
+        '''
+        Sets the logic gate to be used on subsequent calls to self.append_matcher(). This should
+        only be called internal to refind - use set_logic argument to self.append_matcher() instead.
+        '''
         self._current_logic = logic
+        if isinstance(self._matcher, DefaultMatcher):
+            # Nothing is going to be gated on next call
+            return False
         return True
 
-    def set_invert(self, invert):
+    def set_invert(self, invert:bool) -> None:
+        '''
+        Sets the invert state to be used on subsequent calls to self.append_matcher(). This should
+        only be called internal to refind - use Matcher.set_invert() on the matcher object instead.
+        '''
         self._invert = invert
 
-    def add_action(self, action):
+    def add_action(self, action:Action) -> None:
+        '''
+        Adds an action that will be executed on matched paths.
+        '''
         self._actions.append(action)
 
-    def set_verbose(self, verbose):
+    def set_verbose(self, verbose:bool) -> None:
+        '''
+        Set verbose output state.
+        '''
         # Not yet used locally
         self._verbose = verbose
 
-    def append_matcher(self, matcher, set_logic=None, set_invert=None):
+    def append_matcher(self, matcher:Matcher, set_logic:LogicOperation=None) -> None:
+        '''
+        Appends a matcher using a logic gate (AND or OR).
+        Inputs: matcher - The matcher to append
+                set_logic - The logic gate to use when appending this matcher
+        '''
         if set_logic is not None:
             self.set_logic(set_logic)
-        if set_invert is not None:
-            self.set_invert(set_invert)
 
-        matcher.set_invert(self._invert)
+        if self._invert is not None:
+            matcher.set_invert(self._invert)
 
         if isinstance(self._matcher, DefaultMatcher):
             # Only default matcher set - replace with this matcher
@@ -768,7 +862,10 @@ class Finder:
         self._current_logic = LogicOperation.AND
         self._invert = False
 
-    def set_matcher(self, matcher):
+    def set_matcher(self, matcher:Matcher):
+        '''
+        Clears out the current matcher and sets the given matcher.
+        '''
         self._matcher = matcher
 
     def _handle_path(self, path_parser, actions, match_list):
@@ -789,11 +886,27 @@ class Finder:
         depth = path_parser.get_rel_depth()
         return self._is_depth_ok(depth)
 
-    def execute(self, default_root='.', default_action=PrintAction, return_list=False):
+    def execute(
+            self,
+            default_root:str='.',
+            default_action:Action=PrintAction,
+            return_list:bool=False
+    ) -> Union[List[PathParser],None]:
+        '''
+        Executes with the set options, matchers, and actions.
+        Inputs: default_root:  The default root to use when no root was previously added
+                default_action:  The default action to use when no action was previously added
+                return_list:  Set to True if returning a list of PathParser is desired, leave set
+                              to False in order to save on memory when not needed
+        Returns: a list of PathParser when return_list is True or None when return_list is False
+        '''
         root_dirs = self._root_dirs
         if not root_dirs and default_root is not None:
             # Default to "."
             root_dirs = [default_root]
+        else:
+            # Remove None placeholders
+            root_dirs = [r for r in root_dirs if r is not None]
         actions = self._actions
         if not actions and default_action is not None:
             # Default to print
@@ -1163,19 +1276,12 @@ class FinderArgParser:
             elif self._opt_idx != 0 and self._current_option != Options.DOUBLEDASH:
                 raise ValueError('paths must precede expression: {}'.format(self._current_argument))
             else:
-                finder.add_root_dir(self._current_argument)
+                finder.add_root(self._current_argument)
         elif self._current_option == Options.TYPE:
-            types = []
-            for c in self._current_argument:
-                # Don't require comma like find command, but also don't error out if they are included
-                if c != ',':
-                    try:
-                        types.append(FindType(c))
-                    except ValueError:
-                        raise ValueError('Unsupported or unknown type {} in types string: {}'.format(c, self._current_argument))
-            if not types:
+            type_matcher = TypeMatcher(self._current_argument)
+            if not type_matcher.type_list:
                 raise ValueError('No value given for type option')
-            finder.append_matcher(TypeMatcher(types))
+            finder.append_matcher(type_matcher)
         elif self._current_option == Options.MAX_DEPTH:
             try:
                 max_depth = int(self._current_argument)
@@ -1366,3 +1472,14 @@ def main(cliargs):
     else:
         print('Failed to parse arguments', file=sys.stderr)
         return 1
+
+def example():
+    from io import StringIO
+    finder = Finder()
+    finder.set_min_depth(1)
+    finder.add_root('.')
+    finder.append_matcher(TypeMatcher(FindType.FILE, FindType.DIRECTORY))
+    output_stream = StringIO()
+    finder.add_action(PyPrintAction('{perm} {name}', file=output_stream))
+    finder.execute()
+    print(output_stream.getvalue(), end='')

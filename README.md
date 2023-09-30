@@ -1,10 +1,12 @@
 # refind
+
 A find clone in Python with both CLI and library interfaces
 
 ## Shameless Promotion
+
 Check out my other Python clone tools:
-- [sedeuce](https://pypi.org/project/sedeuce/)
 - [greplica](https://pypi.org/project/greplica/)
+- [sedeuce](https://pypi.org/project/sedeuce/)
 
 ## Known Differences with find
 
@@ -24,6 +26,7 @@ Check out my other Python clone tools:
 Feel free to open a bug report or make a merge request on [github](https://github.com/Tails86/refind/issues).
 
 ## Installation
+
 This project is uploaded to PyPI at https://pypi.org/project/refind/
 
 To install, ensure you are connected to the internet and execute: `python3 -m pip install refind --upgrade`
@@ -120,4 +123,147 @@ Partially implements find command entirely in Python.
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
         -pyexec PYFORMAT ;  Execute the COMMAND as a pyformat (see pyprint)
         -delete  Deletes every matching path
+```
+
+## Library Help
+
+refind can be used as a library from another module. The following is a simple example.
+```py
+    import refind
+    from io import StringIO
+
+    finder = refind.Finder()
+    finder.set_min_depth(1)
+    finder.add_root('.')
+    finder.append_matcher(refind.TypeMatcher(FindType.FILE, FindType.DIRECTORY))
+    output_stream = StringIO()
+    finder.add_action(refind.PyPrintAction('{perm} {name}', file=output_stream))
+    matches = finder.execute(return_list=True)
+
+    # Prints the string that contains the result of all actions performed
+    print(output_stream.getvalue(), end='')
+
+    # Prints the contents of matches
+    for match in matches:
+        print(f'{match.find_root}, {match.root}, {match.rel_dir}, {match.name}, {match.full_path}')
+```
+
+The following Finder functions may be used to setup Finder.
+```py
+def add_root(self, *root_dirs:Union[str,List[str]]) -> None:
+    '''
+    Adds one or more roots. Each root will be treated as a glob when executing under Windows.
+    '''
+
+def set_min_depth(self, min_depth:int) -> None:
+    '''
+    Sets the global minimum depth limit
+    '''
+
+def set_max_depth(self, max_depth:int) -> None:
+    '''
+    Sets the global maximum depth limit
+    '''
+
+def add_action(self, action:Action) -> None:
+    '''
+    Adds an action that will be executed on matched paths.
+    '''
+
+def append_matcher(self, matcher:refind.Matcher, set_logic:refind.LogicOperation=None) -> None:
+    '''
+    Appends a matcher using a logic gate (AND or OR).
+    Inputs: matcher - The matcher to append
+            set_logic - The logic gate to use when appending this matcher
+    '''
+
+def set_matcher(self, matcher:refind.Matcher):
+    '''
+    Clears out the current matcher and sets the given matcher.
+    '''
+```
+
+The following Actions are provided by refind.
+```py
+# Does nothing - can be used as the default_action when match output is all that is desired
+NullAction()
+
+# Simply prints the full path of the item
+PrintAction(end:str=None, file:io.IOBase=None, flush:bool=False)
+
+# Prints the item using python format string
+PyPrintAction(format:str, end:str=None, file:io.IOBase=None, flush:bool=False)
+
+# Prints the item using printf format string
+PrintfAction(format:str, end:str=None, file:io.IOBase=None, flush:bool=False)
+
+# Executes custom command where {} is the full path to the item
+ExecuteAction(command:List[str])
+
+# Executes custom command where each element in the command is a format string
+PyExecuteAction(command:List[str])
+
+# Deletes the matched item
+DeleteAction()
+```
+
+The following Matchers are provided by refind. Use set_invert() function after creating the
+matcher if inverting the result is desired.
+```py
+# Statically return True or False for every item
+StaticMatcher(value:bool)
+
+# The default matcher when none specified (same as StaticMatcher(True))
+DefaultMatcher()
+
+# Matches against the name of the item
+NameMatcher(pattern:str)
+
+# Matches against the full path of the item
+FullPathMatcher(pattern:str)
+
+# Matches against the full path of the item using regex
+RegexMatcher(pattern:str, regex_type:refind.RegexType)
+
+# Matches against the item's type
+TypeMatcher(*types:Union[refind.FindType,str,List[refind.FindType],List[str]])
+
+# Matches against os.stat time relative to current time
+StatTimeIncrementMatcher(
+    value_comparison:refind.ValueComparison,
+    rel_s:float,
+    increment_s:float,
+    current_time_s:float,
+    stat_name:str
+)
+
+# Matches against os.stat time to an absolute time
+StatTimeMatcher(
+    value_comparison:refind.ValueComparison,
+    stat_or_time:Union[os.stat_result,float],
+    stat_name:str,
+    r_stat_name:str=None
+)
+
+# Matches when directory empty or file size is 0 bytes
+EmptyMatcher()
+
+# Matches against access type for current user (read, write, execute)
+AccessMatcher(access_type:int)
+
+# Matches against group name or ID
+GroupMatcher(gid_or_name:Union[int,str])
+
+# Matches against user name or ID
+UserMatcher(uid_or_name:Union[int,str])
+
+# Matches against octal perm value
+PermMatcher(perm:int, logic_operation:refind.LogicOperation=None)
+
+# Gates two matchers together using logical AND or OR
+GatedMatcher(
+    left_matcher:refind.Matcher,
+    right_matcher:refind.Matcher,
+    operation:refind.LogicOperation=LogicOperation.AND
+)
 ```
