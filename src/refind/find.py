@@ -33,7 +33,7 @@ from datetime import datetime, timedelta
 import glob
 import stat
 
-__version__ = '0.9.5'
+__version__ = '0.9.6'
 
 try:
     import grp
