@@ -137,7 +137,10 @@ class PathParser:
     @property
     def root(self):
         ''' Returns the directory path of the current item '''
-        return self._root
+        if self._root:
+            return self._root
+        else:
+            return self._find_root
 
     @property
     def rel_dir(self):
@@ -170,9 +173,9 @@ class PathParser:
         Returns the depth of the item where 0 is the find_root itself, 1 is an item directly under
         find_root, etc.
         '''
-        if self._rel_dir is None:
+        if not self._root:
             return 0
-        elif not self._rel_dir:
+        elif self._root == self._find_root:
             return 1
         depth = len(self._rel_dir.split(os.sep)) + 1
         return depth
@@ -232,6 +235,113 @@ class PyPrintAction(Action):
 
     def handle(self, path_parser):
         print_out = self._format.format(**path_parser.to_pydict())
+        print(print_out, end=self._end, file=self._file, flush=self._flush)
+
+class PrintfAction(Action):
+    ''' Prints the item using printf format string '''
+
+    # Group 1 is format specifier
+    # Group 2 is printf type (0 to 2 characters in length)
+    printf_search_pattern = re.compile(r'%([^a-zA-Z%{[(]*)(([A-CT].)|([a-zD-SU-Z%{[(])|($))')
+
+    def __init__(self, format:str, end=None, file=None, flush=False):
+        super().__init__()
+        self._format_base = bytes(format, "utf-8").decode("unicode_escape").replace('{', '{{').replace('}', '}}')
+        self._end = end
+        self._file = file
+        self._flush = flush
+        self._dict = {}
+
+    def _replace_fn(self, matchobj:re.Match):
+        format_specifier:str = matchobj.group(1)
+        printf_type:str = matchobj.group(2)
+        format_type = '%' + format_specifier + printf_type
+        value = None
+        if printf_type == '%' or printf_type == '\n' or printf_type == '':
+            return format_type
+        elif printf_type == 'a':
+            value = '{atime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+        elif printf_type == 'c':
+            value = '{ctime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+        elif printf_type == 't':
+            value = '{mtime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+        elif printf_type[0] in 'ABCT':
+            t = printf_type[0]
+            if t == 'A':
+                time_str = 'atime'
+            elif t == 'B':
+                # Probably not right, but that's ok
+                time_str = 'ctime'
+            elif t == 'C':
+                time_str = 'ctime'
+            else:
+                time_str = 'mtime'
+
+            f = printf_type[1]
+            if f == '@':
+                if t == 'A':
+                    value = self._dict['st_atime']
+                elif t == 'C':
+                    value = self._dict['st_ctime']
+                else:
+                    value = self._dict['st_mtime']
+            elif f == '+':
+                value = f'{{{time_str}:%Y-%m-%d+%H:%M:%S.%f}}'.format(**self._dict)
+            else:
+                value = f'{{{time_str}:%{f}}}'.format(**self._dict)
+        elif printf_type == 'd':
+            value = self._dict['depth']
+        elif printf_type == 'D':
+            value = self._dict['st_dev']
+        elif printf_type == 'f':
+            value = self._dict['name']
+        elif printf_type == 'g':
+            value = self._dict['group']
+        elif printf_type == 'G':
+            value = self._dict['st_gid']
+        elif printf_type == 'h':
+            value = self._dict['root']
+        elif printf_type == 'H':
+            value = self._dict['find_root']
+        elif printf_type == 'i':
+            value = self._dict['st_ino']
+        elif printf_type == 'l':
+            value = self._dict['link']
+        elif printf_type == 'm':
+            value = self._dict['perm_oct']
+        elif printf_type == 'M':
+            value = self._dict['perm']
+        elif printf_type == 'p':
+            value = self._dict['full_path']
+        elif printf_type == 'P':
+            value = os.path.join(self._dict['rel_dir'], self._dict['name'])
+            if value == self._dict['find_root']:
+                value = ''
+        elif printf_type == 's':
+            value = self._dict['st_size']
+        elif printf_type == 'u':
+            value = self._dict['user']
+        elif printf_type == 'U':
+            value = self._dict['st_uid']
+        elif printf_type == 'y':
+            value = self._dict['type']
+
+        if format_specifier:
+            if isinstance(value, str):
+                format_specifier = format_specifier.lstrip()
+
+            if '-' in format_specifier:
+                format_specifier = format_specifier.replace('-', '<', 1)
+            else:
+                format_specifier = '>' + format_specifier
+
+            return f'{value:{format_specifier}}'
+        else:
+            return value
+
+    def handle(self, path_parser):
+        self._dict = path_parser.to_pydict()
+        print_out = self.printf_search_pattern.sub(self._replace_fn, self._format_base)
         print(print_out, end=self._end, file=self._file, flush=self._flush)
 
 class ExecuteAction(Action):
@@ -685,6 +795,7 @@ class Options(Enum):
     PYEXEC = enum.auto()
     PRINT = enum.auto()
     PRINT0 = enum.auto()
+    PRINTF = enum.auto()
     PYPRINT = enum.auto()
     PYPRINT0 = enum.auto()
     DELETE = enum.auto()
@@ -751,6 +862,7 @@ class FinderArgParser:
         '-pyexec': Options.PYEXEC,
         '-print': Options.PRINT,
         '-print0': Options.PRINT0,
+        '-printf': Options.PRINTF,
         '-pyprint': Options.PYPRINT,
         '-pyprint0': Options.PYPRINT0,
         '-delete': Options.DELETE,
@@ -834,10 +946,11 @@ class FinderArgParser:
     actions
         -print  Print the matching path
         -print0  Print the matching path without newline
+        -printf  Print using find printf formatting
         -pyprint PYFORMAT  Print using python print() using named args:
                            find_root: the root given to refind
                            root: the directory name this item is in
-                           rel_dir: the relative directory name from root
+                           rel_dir: the relative directory name from find_root
                            name: the name of the item
                            full_path: the full path of the item
                            mode_oct: st_mode as octal string
@@ -1103,6 +1216,8 @@ class FinderArgParser:
                 else:
                     finder.add_action(PyExecuteAction(self._current_command))
                 self._current_command = []
+        elif self._current_option == Options.PRINTF:
+            finder.add_action(PrintfAction(self._current_argument, ''))
         elif self._current_option == Options.PYPRINT:
             finder.add_action(PyPrintAction(self._current_argument))
         elif self._current_option == Options.PYPRINT0:
