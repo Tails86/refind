@@ -335,7 +335,7 @@ class PrintfAction(Action):
 
             return f'{value:{format_specifier}}'
         else:
-            return value
+            return str(value)
 
     def handle(self, path_parser):
         self._dict = path_parser.to_pydict()

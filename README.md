@@ -4,7 +4,7 @@ A find clone in Python with both CLI and library interfaces
 ## Installation
 This project is uploaded to PyPI at https://pypi.org/project/refind/
 
-To install, ensure you are connected to the internet and execute: `python3 -m pip install refind`
+To install, ensure you are connected to the internet and execute: `python3 -m pip install refind --upgrade`
 
 ## CLI Help
 ```
