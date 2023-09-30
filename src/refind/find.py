@@ -248,21 +248,21 @@ class PrintfAction(Action):
         self._end = end
         self._file = file
         self._flush = flush
-        self._dict = {}
 
-    def _replace_fn(self, matchobj):
+    @staticmethod
+    def _replace_fn(item_dict, matchobj):
         format_specifier:str = matchobj.group(1)
         printf_type:str = matchobj.group(2)
-        format_type = '%' + format_specifier + printf_type
+        original_input = '%' + format_specifier + printf_type
         value = None
         if printf_type == '%' or printf_type == '\n' or printf_type == '':
-            return format_type
+            return original_input
         elif printf_type == 'a':
-            value = '{atime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+            value = '{atime:%a %b %d %H:%M:%S.%f %Y}'.format(**item_dict)
         elif printf_type == 'c':
-            value = '{ctime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+            value = '{ctime:%a %b %d %H:%M:%S.%f %Y}'.format(**item_dict)
         elif printf_type == 't':
-            value = '{mtime:%a %b %d %H:%M:%S.%f %Y}'.format(**self._dict)
+            value = '{mtime:%a %b %d %H:%M:%S.%f %Y}'.format(**item_dict)
         elif printf_type[0] in 'ABCT':
             t = printf_type[0]
             if t == 'A':
@@ -277,69 +277,80 @@ class PrintfAction(Action):
 
             f = printf_type[1]
             if f == '@':
-                if t == 'A':
-                    value = self._dict['st_atime']
-                elif t == 'C':
-                    value = self._dict['st_ctime']
-                else:
-                    value = self._dict['st_mtime']
+                value = item_dict['st_' + time_str]
             elif f == '+':
-                value = f'{{{time_str}:%Y-%m-%d+%H:%M:%S.%f}}'.format(**self._dict)
+                value = f'{{{time_str}:%Y-%m-%d+%H:%M:%S.%f}}'.format(**item_dict)
             else:
-                value = f'{{{time_str}:%{f}}}'.format(**self._dict)
+                value = f'{{{time_str}:%{f}}}'.format(**item_dict)
         elif printf_type == 'd':
-            value = self._dict['depth']
+            value = item_dict['depth']
         elif printf_type == 'D':
-            value = self._dict['st_dev']
+            value = item_dict['st_dev']
         elif printf_type == 'f':
-            value = self._dict['name']
+            value = item_dict['name']
         elif printf_type == 'g':
-            value = self._dict['group']
+            value = item_dict['group']
         elif printf_type == 'G':
-            value = self._dict['st_gid']
+            value = item_dict['st_gid']
         elif printf_type == 'h':
-            value = self._dict['root']
+            value = item_dict['root']
         elif printf_type == 'H':
-            value = self._dict['find_root']
+            value = item_dict['find_root']
         elif printf_type == 'i':
-            value = self._dict['st_ino']
+            value = item_dict['st_ino']
         elif printf_type == 'l':
-            value = self._dict['link']
+            value = item_dict['link']
         elif printf_type == 'm':
-            value = self._dict['perm_oct']
+            value = item_dict['perm_oct']
         elif printf_type == 'M':
-            value = self._dict['perm']
+            value = item_dict['perm']
         elif printf_type == 'p':
-            value = self._dict['full_path']
+            value = item_dict['full_path']
         elif printf_type == 'P':
-            value = os.path.join(self._dict['rel_dir'], self._dict['name'])
-            if value == self._dict['find_root']:
+            value = os.path.join(item_dict['rel_dir'], item_dict['name'])
+            if value == item_dict['find_root']:
                 value = ''
         elif printf_type == 's':
-            value = self._dict['st_size']
+            value = item_dict['st_size']
         elif printf_type == 'u':
-            value = self._dict['user']
+            value = item_dict['user']
         elif printf_type == 'U':
-            value = self._dict['st_uid']
+            value = item_dict['st_uid']
         elif printf_type == 'y':
-            value = self._dict['type']
+            value = item_dict['type']
 
-        if format_specifier:
+        if not value:
+            # Not handled
+            return original_input
+        elif format_specifier:
             if isinstance(value, str):
+                # Printf ignores spaces at the beginning of format string when value is string while
+                # python format would raise exception - explicitly ignore leading spaces here
                 format_specifier = format_specifier.lstrip()
+            elif isinstance(value, float):
+                # Explicitly treat as fixed-point number format
+                format_specifier += 'f'
 
             if '-' in format_specifier:
+                # The "-" printf specifier is the same as "<" specifier in python format
                 format_specifier = format_specifier.replace('-', '<', 1)
             else:
+                # Python does left justify by default while printf does right justify by default
+                # This explicitly does right justify by default for this printf action
                 format_specifier = '>' + format_specifier
 
-            return f'{value:{format_specifier}}'
+            try:
+                return f'{value:{format_specifier}}'
+            except ValueError:
+                # Invalid format specifier
+                return original_input
         else:
             return str(value)
 
     def handle(self, path_parser):
-        self._dict = path_parser.to_pydict()
-        print_out = self.printf_search_pattern.sub(self._replace_fn, self._format_base)
+        item_dict = path_parser.to_pydict()
+        replace_lambda = lambda matchobj : __class__._replace_fn(item_dict, matchobj)
+        print_out = self.printf_search_pattern.sub(replace_lambda, self._format_base)
         print(print_out, end=self._end, file=self._file, flush=self._flush)
 
 class ExecuteAction(Action):
