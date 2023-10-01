@@ -34,9 +34,11 @@ from datetime import datetime, timedelta
 import glob
 import stat
 import io
+import textwrap
 from typing import Any, Union, List
 
 __version__ = '1.0.1'
+PACKAGE_NAME = 'refind'
 
 try:
     import grp
@@ -1071,7 +1073,8 @@ class FinderArgParser:
 
     @staticmethod
     def _print_help():
-        print('''Partially implements find command entirely in Python.
+        print(textwrap.dedent('''
+    Partially implements find command entirely in Python.
 
     Usage: refind [path...] [expression...]
 
@@ -1091,6 +1094,7 @@ class FinderArgParser:
         -maxdepth LEVELS  Sets the maximum directory depth of find (default: inf)
         -mindepth LEVELS  Sets the minimum directory depth of find (default: 0)
         -regextype TYPE  Set the regex type to py, sed, egrep (default: sed)
+        --version  Shows version number and exits
 
     tests
         -name PATTERN  Tests against the name of item using fnmatch
@@ -1156,7 +1160,7 @@ class FinderArgParser:
         -fpyprint0 FILE PYFORMAT  Same as above but write to given FILE instead of stdout
         -exec COMMAND ;  Execute the COMMAND where {} in the command is the matching path
         -pyexec PYFORMAT ;  Execute the COMMAND as a pyformat (see pyprint)
-        -delete  Deletes every matching path''')
+        -delete  Deletes every matching path''').strip('\r\n'))
 
     def _handle_option(self, finder):
         ''' Called when option parsed, returns True iff arg is expected '''
@@ -1429,6 +1433,9 @@ class FinderArgParser:
 
     def parse(self, cliargs, finder):
         ''' Parse the cliargs list into the finder '''
+        if '--version' in cliargs:
+            print('{} {}'.format(PACKAGE_NAME, __version__))
+            sys.exit(0)
         # argparse is too complex to handle simple commands that find processes
         for arg in cliargs:
             self._current_argument = arg

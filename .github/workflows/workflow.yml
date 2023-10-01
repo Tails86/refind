@@ -20,5 +20,5 @@ jobs:
         USER: ${{secrets.PYPI_USER}}
         PSWD: ${{secrets.PYPI_PASSWORD}}
       run: |
-        python setup.py sdist
+        python setup.py sdist wheel
         twine upload --repository pypi -u "$USER" -p "$PSWD" dist/*
