@@ -37,7 +37,7 @@ import io
 import textwrap
 from typing import Any, Union, List
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 PACKAGE_NAME = 'refind'
 
 try:
