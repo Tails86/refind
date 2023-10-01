@@ -37,7 +37,7 @@ import io
 import textwrap
 from typing import Any, Union, List
 
-__version__ = '1.0.4'
+__version__ = '1.0.5'
 PACKAGE_NAME = 'refind'
 
 try:
@@ -208,7 +208,10 @@ class PathParser:
 
     def _set_stat(self):
         if self._stat is None:
-            self._stat = os.stat(self.full_path)
+            try:
+                self._stat = os.stat(self.full_path)
+            except OSError:
+                pass
 
     @property
     def stat(self):
@@ -476,7 +479,10 @@ class Matcher:
 
     def is_match(self, path_parser):
         result = self._is_match(path_parser)
-        if self._invert:
+        if result is None:
+            # Error result - always false, regardless of self._invert
+            result = False
+        elif self._invert:
             result = not result
         return result
 
@@ -604,7 +610,11 @@ class StatTimeIncrementMatcher(Matcher):
         self._stat_name = stat_name
 
     def _is_match(self, path_parser):
-        stat = path_parser.stat()
+        stat = path_parser.stat
+        if stat is None:
+            # Couldn't get stat
+            return None
+
         # t should be positive
         t = self._current_time_s - self._get_stat_time(stat)
         t_inc = math.floor(t / self._increment_s)
@@ -639,7 +649,11 @@ class StatTimeMatcher(Matcher):
             self._time_point = stat_or_time
 
     def _is_match(self, path_parser):
-        t = self._get_stat_time(os.stat(path_parser.full_path))
+        stat = path_parser.stat
+        if stat is None:
+            # Couldn't get stat
+            return None
+        t = self._get_stat_time(stat)
         if self._value_comparison == ValueComparison.GREATER_THAN:
             return (t > self._time_point)
         elif self._value_comparison == ValueComparison.LESS_THAN:
@@ -657,7 +671,10 @@ class EmptyMatcher(Matcher):
 
     def _is_match(self, path_parser):
         if os.path.isfile(path_parser.full_path):
-            stat = os.stat(path_parser.full_path)
+            stat = path_parser.stat
+            if stat is None:
+                # Couldn't get stat
+                return None
             return (stat.st_size == 0)
         elif os.path.isdir(path_parser.full_path):
             return not bool(os.listdir(path_parser.full_path))
@@ -690,7 +707,10 @@ class GroupMatcher(Matcher):
                 raise ValueError('Could not locate group \'{}\' on system'.format(gid_or_name))
 
     def _is_match(self, path_parser):
-        stat = os.stat(path_parser.full_path)
+        stat = path_parser.stat
+        if stat is None:
+            # Couldn't get stat
+            return None
         return (stat.st_gid == self._gid)
 
 class UserMatcher(Matcher):
@@ -710,7 +730,10 @@ class UserMatcher(Matcher):
                 raise ValueError('Could not locate user \'{}\' on system'.format(uid_or_name))
 
     def _is_match(self, path_parser):
-        stat = os.stat(path_parser.full_path)
+        stat = path_parser.stat
+        if stat is None:
+            # Couldn't get stat
+            return None
         return (stat.st_uid == self._uid)
 
 class PermMatcher(Matcher):
@@ -721,7 +744,10 @@ class PermMatcher(Matcher):
         self._logic_operation = logic_operation
 
     def _is_match(self, path_parser):
-        stat = os.stat(path_parser.full_path)
+        stat = path_parser.stat
+        if stat is None:
+            # Couldn't get stat
+            return None
         perm = (stat.st_mode & 0o777)
         if self._logic_operation is None:
             return (perm == self._perm)
