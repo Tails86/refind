@@ -37,5 +37,6 @@ def main():
             # Allow Python repl to format the exception to output
             raise e
 
-# Execute above
-sys.exit(main())
+if __name__ == '__main__':
+    # Execute above
+    sys.exit(main())
