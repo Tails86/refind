@@ -37,7 +37,7 @@ import io
 import textwrap
 from typing import Any, Union, List
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 PACKAGE_NAME = 'refind'
 
 try:
@@ -221,6 +221,8 @@ class PathParser:
     def get_type(self):
         ''' Returns the FindType of the item or None if it cannot be determined '''
         self._set_stat()
+        if self._stat is None:
+            return None
         mode = self._stat.st_mode
         if stat.S_ISLNK(mode):
             return FindType.SYMBOLIC_LINK
@@ -253,30 +255,54 @@ class PathParser:
 
     def to_pydict(self):
         ''' Returns the dictionary used in -py* actions '''
+        t = self.get_type()
         d = {
             "full_path": self.full_path,
             "root": self.root,
             "rel_dir": self.rel_dir,
             "name": self.name,
-            "find_root": self.find_root
+            "find_root": self.find_root,
+            "type": t.value if t else '-',
+            "depth": self.get_rel_depth()
         }
         self._set_stat()
-        d.update({k: getattr(self._stat, k) for k in dir(self._stat) if k.startswith('st_')})
-        d['atime'] = datetime.fromtimestamp(self._stat.st_atime)
-        d['ctime'] = datetime.fromtimestamp(self._stat.st_ctime)
-        d['mtime'] = datetime.fromtimestamp(self._stat.st_mtime)
-        d['mode_oct'] = oct(self._stat.st_mode)[2:]
-        d['perm_oct'] = oct(self._stat.st_mode & 0o777)[2:]
-        t = self.get_type()
-        d['perm'] = stat.filemode(self._stat.st_mode)
-        d['type'] = t.value if t else '-'
-        d['depth'] = self.get_rel_depth()
-        d['group'] = _group_id_to_name(self._stat.st_gid)
-        try:
-            d['link'] = os.readlink(self.full_path)
-        except OSError:
+        if self._stat is not None:
+            d.update({k: getattr(self._stat, k) for k in dir(self._stat) if k.startswith('st_')})
+            d['atime'] = datetime.fromtimestamp(self._stat.st_atime)
+            d['ctime'] = datetime.fromtimestamp(self._stat.st_ctime)
+            d['mtime'] = datetime.fromtimestamp(self._stat.st_mtime)
+            d['mode_oct'] = oct(self._stat.st_mode)[2:]
+            d['perm_oct'] = oct(self._stat.st_mode & 0o777)[2:]
+            d['perm'] = stat.filemode(self._stat.st_mode)
+            d['group'] = _group_id_to_name(self._stat.st_gid)
+            try:
+                d['link'] = os.readlink(self.full_path)
+            except OSError:
+                d['link'] = ''
+            d['user'] = _user_id_to_name(self._stat.st_uid)
+        else:
+            d['st_atime'] = 0.0
+            d['st_atime_ns'] = 0
+            d['st_blksize'] = 0
+            d['st_blocks'] = 0
+            d['st_ctime'] = 0.0
+            d['st_ctime_ns'] = 0
+            d['st_dev'] = 0
+            d['st_gid'] = 0
+            d['st_ino'] = 0
+            d['st_mode'] = 0
+            d['st_mtime'] = 0.0
+            d['st_mtime_ns'] = 0
+            d['st_nlink'] = 0
+            d['st_rdev'] = 0
+            d['st_size'] = 0
+            d['atime'] = d['ctime'] = d['mtime'] = datetime.fromtimestamp(0)
+            d['mode_oct'] = '00000'
+            d['perm_oct'] = '000'
+            d['perm'] = '----------'
+            d['group'] = ''
             d['link'] = ''
-        d['user'] = _user_id_to_name(self._stat.st_uid)
+            d['user'] = ''
         return d
 
 class Action:
