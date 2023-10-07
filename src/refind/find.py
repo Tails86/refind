@@ -37,7 +37,7 @@ import io
 import textwrap
 from typing import Any, Union, List
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'
 PACKAGE_NAME = 'refind'
 
 try:
@@ -1445,9 +1445,9 @@ class FinderArgParser:
                 complete = False # Continue parsing until ;
             else:
                 if self._current_option == Options.EXEC:
-                    finder.add_action(ExecuteAction(self._current_option_arguments))
+                    finder.add_action(ExecuteAction(self._current_option_arguments[:-1]))
                 else:
-                    finder.add_action(PyExecuteAction(self._current_option_arguments))
+                    finder.add_action(PyExecuteAction(self._current_option_arguments[:-1]))
         elif self._current_option == Options.FPRINT:
             fp = SharedFileWriter(self._current_argument, binary=False)
             finder.add_action(PrintAction(file=fp))
